@@ -3,8 +3,8 @@ import cv2
 import numpy
 from matplotlib import pyplot as plt
 
-file = h5py.File("/media/hasan/DATA/Fac/BMC Master/Thesis/myCode/dataset_stl_500_20.h5", 'r')
-d = file['/data']
+f = h5py.File("/home/hasans/Downloads/dataset_stl_16000_32_1.h5", 'r')
+d = f['/data']
 print d.shape
 im = numpy.reshape(d[:,2],[32,32,3])
 img = cv2.imread('Mikolajczyk/graffiti/img1.ppm')[0:32, 0:32]

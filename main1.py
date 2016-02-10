@@ -13,7 +13,7 @@ import numpy
 import tensorflow as tf
 #import cv2
 
-NUM_LABELS = 500
+NUM_LABELS = 16000
 
 class HDF5Reader:
   
@@ -75,15 +75,16 @@ class HDF5Reader:
         if X.shape[1] == batchSize:
             self.curr_indexv += batchSize
         else:
-            self.curr_file_index = (self.curr_file_index+1) % len(self.file_list)
-            self.__loadHDF5(self.file_list[self.curr_file_index])
+            #self.curr_file_index = (self.curr_file_index+1) % len(self.file_list)
+            #self.__loadHDF5(self.file_list[self.curr_file_index])
+            self.curr_indexv = 0
             samples_missing = batchSize - X.shape[1]
             if(X.shape[1] == 0):
-                X = self.curr_vdata[:,self.curr_index:self.curr_index+batchSize]
-                Y = self.get_labels(numpy.transpose(self.curr_vlabel[:, self.curr_index:self.curr_index+batchSize]),NUM_LABELS)
-            else:
-                X = numpy.vstack([X,self.curr_vdata[:, 0:samples_missing]])
-                Y = numpy.vstack([Y,numpy.transpose(self.get_labels(self.curr_vlabel[:, 0:samples_missing]))])
+                X = self.curr_vdata[:,self.curr_indexv:self.curr_indexv+batchSize]
+                Y = self.get_labels(numpy.transpose(self.curr_vlabel[:, self.curr_indexv:self.curr_indexv+batchSize]),NUM_LABELS)
+            else:               
+                X = numpy.hstack([X,self.curr_vdata[:, 0:samples_missing]])
+                Y = numpy.vstack([Y,self.get_labels(numpy.transpose(self.curr_vlabel[:, 0:samples_missing]),NUM_LABELS)])
             self.curr_indexv = samples_missing    
         X = numpy.transpose(X)
         X[ X<0 ] = 0
@@ -114,8 +115,8 @@ class HDF5Reader:
                 X = self.curr_data[:,self.curr_index:self.curr_index+batchSize]
                 Y = self.get_labels(numpy.transpose(self.curr_label[:, self.curr_index:self.curr_index+batchSize]),NUM_LABELS)
             else:
-                X = numpy.vstack([X,self.curr_data[:, 0:samples_missing]])
-                Y = numpy.vstack([Y,numpy.transpose(self.get_labels(self.curr_label[:, 0:samples_missing]))])
+                X = numpy.hstack([X,self.curr_data[:, 0:samples_missing]])
+                Y = numpy.vstack([Y,self.get_labels(numpy.transpose(self.curr_label[:, 0:samples_missing]), NUM_LABELS)])
             self.curr_index = samples_missing    
         X = numpy.transpose(X)
         X[ X<0 ] = 0
@@ -196,9 +197,32 @@ def build_graph(data, keep_prob):
     b_fc1 = bias_variable([NUM_LABELS])
 
     y_conv=tf.nn.softmax(tf.matmul(fc0_drop, W_fc1) + b_fc1)
-     
+                                                                                                                                                                                                                                                
     return y_conv #tf.reshape(y_conv, [data_shape[0],data_shape[1],data_shape[2]])
 
+def build_graph_orig(data, keep_prob):
+    data_shape = data.get_shape().as_list();
+    NUM_CHANNELS = data_shape[3]
+    conv0 = conv2d_layer("conv0",data,[5, 5, NUM_CHANNELS, 64])
+    pool0 = tf.nn.max_pool(conv0, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool0')
+    conv1 = conv2d_layer("conv1",pool0,[5, 5, 64, 128])
+    pool1 = tf.nn.max_pool(conv1, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name='pool1')   
+    conv2 = conv2d_layer("conv2",pool1,[5, 5, 128, 64])
+    
+    shape = conv2.get_shape().as_list()
+    fc0_inputdim = shape[1]*shape[2]*shape[3];   # Resolve input dim into fc0 from conv2-filters
+    
+    fc0 = fc_layer("fc0", conv2, [fc0_inputdim, 512])   
+    
+    fc0_drop = tf.nn.dropout(fc0, keep_prob)
+    
+    #fc1 = fc_layer("fc1", fc0, [128, NUM_LABELS])
+    W_fc1 = weight_variable([512, NUM_LABELS])
+    b_fc1 = bias_variable([NUM_LABELS])
+
+    y_conv=tf.nn.softmax(tf.matmul(fc0_drop, W_fc1) + b_fc1)
+     
+    return y_conv #tf.reshape(y_conv, [data_shape[0],data_shape[1],data_shape[2]])
 
 def train(total_loss, global_step,num_batches_per_epoch):
     
@@ -250,7 +274,10 @@ def main():
     reader = HDF5Reader()
     reader.readFiles("train_files.txt")
     print "Total number of samples: ", reader.computeTotalNumberOfSamples()
-
+    
+    INIT_RATE = 0.001
+    LR_DECAY_FACTOR = 0.1
+    
     BATCH_SIZE = 100
     nr_epochs = 500
     batches_per_epoch = reader.computeTotalNumberOfSamples()/BATCH_SIZE
@@ -273,7 +300,9 @@ def main():
         #lr = tf.placeholder(tf.float32)
         # Build the graph that computes predictions and assert that network output is compatible
         
-        output = build_graph(net_x, 0.5)
+        output = build_graph_orig(net_x, 0.5)
+        print 'output shape: ',output.get_shape().as_list(), ' net_y shape: ', net_y.get_shape().as_list()
+        print 'X shape: ',  net_x.get_shape().as_list()
         assert (output.get_shape().as_list() == net_y.get_shape().as_list() )
         
         # Add l2 loss to loss collection and create final loss tensor as the sum of all losses
@@ -285,7 +314,7 @@ def main():
         #compute cross entropy loss
         #tf.reshape(net_y, [net_y.get_shape().as_list()[1],net_y.get_shape().as_list()[0]])
         
-        absy = tf.abs(net_y)
+        
         logy = tf.log(output + 1e-10)
         mult = net_y*logy
         cross_entropy = -tf.reduce_sum(mult)
@@ -293,9 +322,13 @@ def main():
         
         #tf.reshape(net_y, [net_y.get_shape().as_list()[1],net_y.get_shape().as_list()[0]])
         
-        opt = tf.train.AdamOptimizer(0.0001)
+        decay_steps = int(batches_per_epoch)
+        # Decay the learning rate exponentially based on the number of steps.
+        lr = tf.train.exponential_decay(INIT_RATE, global_step, decay_steps, LR_DECAY_FACTOR,  staircase=True)
+        tf.scalar_summary('learning_rate', lr)
+        opt = tf.train.AdamOptimizer(lr)
         #opt = tf.train.GradientDescentOptimizer(0.000001)
-        train_op = opt.minimize(cross_entropy)
+        train_op = opt.minimize(cross_entropy, global_step=global_step)
         
         
     
@@ -320,7 +353,6 @@ def main():
         summary_writer = tf.train.SummaryWriter('.', graph_def=sess.graph_def)
                 
         saver.restore(sess, 'model.ckpt')   # Load previously trained weights
-        
                 
         reader.reset()
         for epoch in range(nr_epochs):
@@ -336,13 +368,13 @@ def main():
 
                     summary_writer.add_summary(summary, batch)
                     
-                    Xv, Yv = reader.next_batch_val(BATCH_SIZE)
-                    acc = sess.run(accuracy, feed_dict={net_x:Xv, net_y: Yv})
-                    print 'test accuracy = ', acc
+                    #Xv, Yv = reader.next_batch_val(BATCH_SIZE)
+                    #acc = sess.run(accuracy, feed_dict={net_x:Xv, net_y: Yv})
+                    #print "Batch:", batch ,"  Loss: ", error, " Test accuracy: ", acc, "   Duration (sec): ", duration
                     # Save the model checkpoint periodically.
-                    #if batch % 100 == 0:
-                     #   save_path = saver.save(sess, "model.ckpt")
-                      #  print "Model saved in file: ",save_path
+                    if batch % 100 == 0:
+                        save_path = saver.save(sess, "model.ckpt")
+                        print "Model saved in file: ",save_path
 
 
 

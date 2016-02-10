@@ -3,6 +3,8 @@ import itertools
 #import numpy as np
 from matplotlib import pyplot as plt
 
+print 'integration test...'
+
 sift = cv2.xfeatures2d.SIFT_create()  # @UndefinedVariable
 
 img1 = cv2.imread('Mikolajczyk/graffiti/img1.ppm')
