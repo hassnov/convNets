@@ -31,7 +31,8 @@ class HDF5Reader:
         assert len(self.file_list)>0
         
     def __loadHDF5(self,filename):
-        self.curr_file = h5py.File(self.file_list[0], 'r')
+        self.curr_file = h5py.File(filename, 'r')
+        print '-------------- file name ------------', filename
         self.curr_data = self.curr_file['/data']
         self.curr_label = self.curr_file['/label']
         self.curr_vdata = self.curr_file['/vdata']
@@ -352,7 +353,7 @@ def main():
         summary_op = tf.merge_all_summaries()
         summary_writer = tf.train.SummaryWriter('.', graph_def=sess.graph_def)
                 
-        saver.restore(sess, 'model.ckpt')   # Load previously trained weights
+        saver.restore(sess, 'model_1600_32.ckpt')   # Load previously trained weights
                 
         reader.reset()
         for epoch in range(nr_epochs):
@@ -373,7 +374,7 @@ def main():
                     #print "Batch:", batch ,"  Loss: ", error, " Test accuracy: ", acc, "   Duration (sec): ", duration
                     # Save the model checkpoint periodically.
                     if batch % 100 == 0:
-                        save_path = saver.save(sess, "model.ckpt")
+                        save_path = saver.save(sess, "model_1600_32.ckpt")
                         print "Model saved in file: ",save_path
 
 

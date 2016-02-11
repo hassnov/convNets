@@ -207,7 +207,7 @@ def build_graph(data, keep_prob):
 def main():
 
     reader = HDF5Reader()
-    reader.readFiles("train_files1.txt")
+    reader.readFiles("train_files.txt")
     print "Total number of samples: ", reader.computeTotalNumberOfSamples()
 
     BATCH_SIZE = 100
@@ -276,7 +276,7 @@ def main():
     saver = tf.train.Saver(tf.all_variables())
     
             
-    saver.restore(sess, 'model.ckpt')   # Load previously trained weights
+    saver.restore(sess, 'model_1600_32.ckpt')   # Load previously trained weights
     acc, p0,p044, p1,p144,f0 = sess.run([accuracy, pool0,pool0_44, pool1, pool1_44, fc0], feed_dict={net_x:X, net_y:Y})
     
     print 'distance f0', numpy.linalg.norm(f0[1]-f0[0])
